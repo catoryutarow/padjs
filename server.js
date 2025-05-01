@@ -77,15 +77,72 @@ const html = `<!DOCTYPE html>
 
       function App() {
         const [tracks, setTracks] = useState([]);
+        const [audioBuffers, setAudioBuffers] = useState({});
+        const [isLoading, setIsLoading] = useState(true);
+        const [loadingProgress, setLoadingProgress] = useState(0);
 
         useEffect(() => {
+          // 音声ファイルのリストを取得
           fetch('/api/audioList')
             .then(r => r.json())
-            .then(setTracks)
+            .then(async (tracks) => {
+              setTracks(tracks);
+              
+              // 各音声ファイルを先読み
+              const buffers = {};
+              let loadedCount = 0;
+              
+              for (const track of tracks) {
+                try {
+                  const response = await fetch(track.url);
+                  const blob = await response.blob();
+                  const audioUrl = URL.createObjectURL(blob);
+                  buffers[track.url] = new Audio(audioUrl);
+                  
+                  loadedCount++;
+                  setLoadingProgress(Math.round((loadedCount / tracks.length) * 100));
+                } catch (error) {
+                  console.error('Failed to load ' + track.url + ':', error);
+                }
+              }
+              
+              setAudioBuffers(buffers);
+              setIsLoading(false);
+            })
             .catch(console.error);
         }, []);
 
-        const play = url => new Audio(url).play();
+        const play = (url) => {
+          const audio = audioBuffers[url];
+          if (audio) {
+            audio.currentTime = 0; // 再生位置をリセット
+            audio.play();
+          }
+        };
+
+        if (isLoading) {
+          return (
+            <div style={{ textAlign: 'center', padding: '2rem' }}>
+              <h2>音声ファイルを読み込み中...</h2>
+              <div style={{ 
+                width: '300px', 
+                height: '20px', 
+                backgroundColor: '#eee', 
+                borderRadius: '10px',
+                margin: '1rem auto'
+              }}>
+                <div style={{ 
+                  width: loadingProgress + '%', 
+                  height: '100%', 
+                  backgroundColor: '#4f46e5',
+                  borderRadius: '10px',
+                  transition: 'width 0.3s ease'
+                }}></div>
+              </div>
+              <p>{loadingProgress}%</p>
+            </div>
+          );
+        }
 
         return (
           <div className="grid">
